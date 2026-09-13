@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+
+# connectome data is downloaded, not committed
+data/*
+!data/README.md
+!data/malecns/
+data/malecns/*
+!data/malecns/build.py
+
+runs/
+media/*.mp4
+media/preview_mid.png
