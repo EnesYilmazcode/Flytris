@@ -38,9 +38,9 @@ Everything inside the brain box is the real connectome and never changes. The on
 | 3 | Play page: you vs the Lord of the Flies, same pieces, in the browser | GitHub Pages |
 | 4 | Results table on unseen games, with controls, including the no-brain number | This README and the post |
 
-What #1 looks like, rendered with stand-in players (a classic Tetris bot at random skill levels, not flies):
+What #1 looks like, rendered with stand-in players (a classic Tetris bot at random skill levels, not flies). It opens on one game, pulls back to all 1,000, and ends by zooming in on the winner:
 
-<img src="media/preview.png" width="360" alt="1,000 Tetris boards in a grid, most dead, one crowned in gold">
+<img src="media/preview_close.png" width="260" alt="Close-up of one Tetris game with neighbors at the edges"> <img src="media/preview_pull.png" width="260" alt="Camera pulling back over dozens of games"> <img src="media/preview_grid.png" width="260" alt="All 1,000 games in a grid, dead boards dark"> <img src="media/preview_final.png" width="260" alt="Lord of the Flies: the winning board">
 
 ### Design decisions
 

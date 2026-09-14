@@ -68,10 +68,9 @@ def column_tops(boards):
     return np.where(filled.any(1), filled.argmax(1), H)
 
 
-def drop(boards, piece, placement):
-    """Hard-drop one placement onto every board. Returns (boards, lines, dead)."""
+def lock(boards, piece, placement):
+    """Hard-drop one placement onto every board. Returns (locked, landing row, fits)."""
     _, x, cells = PLACEMENTS[piece][placement]
-    n = len(boards)
     top = column_tops(boards)
     cols = cells[:, 1] + x
     y = (top[:, cols] - 1 - cells[:, 0]).min(1)
@@ -79,15 +78,25 @@ def drop(boards, piece, placement):
     out = boards.copy()
     b = np.nonzero(fits)[0]
     out[b[:, None], y[b, None] + cells[:, 0], cols] = piece + 1
+    return out, y, fits
 
-    full = (out != 0).all(2)
+
+def clear(boards):
+    """Remove full rows. Returns (boards, lines, full-row mask)."""
+    full = (boards != 0).all(2)
     lines = full.sum(1)
     if lines.any():
         order = np.argsort(~full, axis=1, kind="stable")
-        out = np.take_along_axis(out, order[:, :, None], 1)
-        out[np.arange(H)[None, :] < lines[:, None]] = 0
-    dead = ~fits | (out[:, :HIDDEN] != 0).any((1, 2))
-    return out, lines, dead
+        boards = np.take_along_axis(boards, order[:, :, None], 1)
+        boards[np.arange(H)[None, :] < lines[:, None]] = 0
+    return boards, lines, full
+
+
+def drop(boards, piece, placement):
+    """lock + clear. Returns (boards, lines, dead)."""
+    locked, _, fits = lock(boards, piece, placement)
+    out, lines, _ = clear(locked)
+    return out, lines, ~fits | (out[:, :HIDDEN] != 0).any((1, 2))
 
 
 LINE_SCORE = np.array([0, 40, 100, 300, 1200])
@@ -109,10 +118,25 @@ class Batch:
         return len(PLACEMENTS[self.piece])
 
     def step(self, choice):
-        choice = np.asarray(choice) % self.options
+        """Place the current piece on every alive board. Dead boards ignore their choice.
+
+        Leaves last_piece, last_choice, last_y (landing row, -1 if it did not fit),
+        last_locked (boards before line clears) and last_full (cleared rows) for renderers.
+        """
+        choice = np.asarray(choice).astype(np.int64)
+        assert (choice[self.alive] >= 0).all() and (choice[self.alive] < self.options).all()
+        self.last_piece, self.last_choice = self.piece, choice
+        self.last_y = np.full(self.n, -1)
+        self.last_locked = self.boards.copy()
+        self.last_full = np.zeros((self.n, H), bool)
         for j in np.unique(choice[self.alive]):
             idx = np.nonzero(self.alive & (choice == j))[0]
-            nb, lines, dead = drop(self.boards[idx], self.piece, j)
+            locked, y, fits = lock(self.boards[idx], self.piece, j)
+            nb, lines, full = clear(locked)
+            dead = ~fits | (nb[:, :HIDDEN] != 0).any((1, 2))
+            self.last_y[idx] = np.where(fits, y, -1)
+            self.last_locked[idx] = locked
+            self.last_full[idx] = full
             self.boards[idx] = nb
             self.lines[idx] += lines
             self.score[idx] += LINE_SCORE[lines]
