@@ -1,4 +1,4 @@
-"""Tetris board -> Poisson spike probabilities on the fly's photoreceptors.
+"""Tetris board -> input spike rates on the fly's photoreceptors.
 
 Columns 0-4 go to the left eye's R1-R6 and columns 5-9 to the right eye's, as
 five strips per eye. R1-R6 have no position in the data, so each takes the
@@ -20,6 +20,17 @@ from .tetris import COLS, H, ROWS, column_tops
 DATA = Path(__file__).resolve().parents[1] / "data" / "malecns"
 MAP = DATA / "eye_map.npz"
 N_CHANNELS = 2 * COLS + 7
+PHASE_SEED = 20260913
+
+
+def board_channels(boards, pieces):
+    """[B, N_CHANNELS] values in 0..1: column heights, holes per column, piece one-hot."""
+    top = column_tops(boards)
+    heights = np.minimum(H - top, ROWS) / ROWS
+    below = np.arange(H)[None, :, None] > top[:, None, :]
+    holes = np.minimum((below & (boards == 0)).sum(1), 8) / 8
+    piece = np.eye(7)[np.asarray(pieces)]
+    return np.concatenate([heights, holes, piece], 1).astype(np.float32)
 
 
 def build_eye_map():
@@ -83,19 +94,16 @@ class Eyes:
         self.in_idx = torch.from_numpy(m["in_idx"]).to(device)
         self.channel = torch.from_numpy(m["channel"]).to(device)
         self.scale = torch.from_numpy(m["scale"]).to(device)
+        rng = np.random.default_rng(PHASE_SEED)
+        self.phase = torch.from_numpy(rng.random(len(m["in_idx"]), dtype=np.float32)).to(device)
         self.board_hz, self.piece_hz, self.device = board_hz, piece_hz, device
 
     def channels(self, boards, pieces):
         """[N_CHANNELS, B] values in 0..1 from boards [B, H, COLS] and piece ids [B]."""
-        top = column_tops(boards)
-        heights = np.minimum(H - top, ROWS) / ROWS
-        below = np.arange(H)[None, :, None] > top[:, None, :]
-        holes = np.minimum((below & (boards == 0)).sum(1), 8) / 8
-        piece = np.eye(7)[pieces]
-        return np.concatenate([heights, holes, piece], 1).T.astype(np.float32)
+        return board_channels(boards, pieces).T
 
     def probs(self, values, board_gain=1.0):
-        """values [N_CHANNELS, B] -> per-step spike probability [n_in, B]."""
+        """values [N_CHANNELS, B] -> input spikes per step [n_in, B]."""
         v = torch.as_tensor(values, device=self.device)
         hz = torch.full((N_CHANNELS, 1), self.board_hz * board_gain, device=self.device)
         hz[2 * COLS:] = self.piece_hz

@@ -1,6 +1,8 @@
 """MaleCNS leaky integrate-and-fire model, batched over flies on the GPU.
 
-All flies share the real wiring; only their inputs differ. Constants are from
+All flies share the real wiring; only their inputs differ. Inputs are regular
+spike trains (a phase accumulator per input cell), so a run is deterministic.
+Constants are from
 Shiu et al. 2024 (philshiu/Drosophila_brain_model, model.py), adapted to a
 1 ms Euler step: decays become exp(-dt/tau), the 1.8 ms synaptic delay rounds
 to 2 steps and the 2.2 ms refractory period to 2 steps.
@@ -15,7 +17,7 @@ DATA = Path(__file__).resolve().parents[1] / "data" / "malecns"
 
 V0, V_RST, V_TH = -52.0, -52.0, -45.0   # mV
 T_MBR, TAU_SYN = 20.0, 5.0              # ms
-W_SYN, F_POI = 0.275, 250               # mV per synapse; Poisson kick = F_POI * W_SYN
+W_SYN, F_POI = 0.275, 250               # mV per synapse; input kick = F_POI * W_SYN
 DELAY_STEPS, REFRACTORY_STEPS = 2, 2
 DT = 1.0                                # ms
 
@@ -38,11 +40,22 @@ def load_edges(threshold):
 
 
 class Brain:
-    def __init__(self, threshold=5, w_scale=1.0, excitatory_photoreceptors=True, device="cuda"):
+    def __init__(self, threshold=5, w_scale=1.0, excitatory_photoreceptors=True,
+                 rewire_seed=None, rewire_keep_sensory=False, device="cuda"):
         self.device = device
         neurons = load_neurons(["idx", "type", "superclass"])
         self.n = len(neurons)
         e = load_edges(threshold)
+        if rewire_seed is not None:
+            # Wiring control: same neurons, in/out degrees and weights, random targets.
+            rng = np.random.default_rng(rewire_seed)
+            if rewire_keep_sensory:
+                # Fair control: photoreceptor outputs stay real, everything downstream is shuffled.
+                is_r = neurons.type.str.match(r"^R[1-8]", na=False).to_numpy()
+                m = np.nonzero(~is_r[e["pre"]])[0]
+                e["post"][m] = rng.permutation(e["post"][m])
+            else:
+                e["post"] = rng.permutation(e["post"])
         sign = e["sign"].astype(np.float32)
         if excitatory_photoreceptors:
             # Histamine from R1-R8 is inhibitory, so from rest it can never drive the lamina.
@@ -64,10 +77,11 @@ class Brain:
         self.a_g = float(np.exp(-DT / TAU_SYN))
 
     @torch.no_grad()
-    def run(self, in_idx, p_in, steps, record_idx, silent_inputs=False):
+    def run(self, in_idx, p_in, steps, record_idx, phase, silent_inputs=False):
         """Simulate `steps` ms from rest.
 
-        in_idx [n_in] input neuron ids; p_in [n_in, B] per-step Poisson spike probability.
+        in_idx [n_in] input neuron ids; p_in [n_in, B] input spikes per step (0..1);
+        phase [n_in] fixed starting phase of each input cell's spike train.
         Returns (spike counts [n_rec, B], mean spikes per step across the batch).
         """
         B = p_in.shape[1]
@@ -79,12 +93,16 @@ class Brain:
         counts = torch.zeros((len(record_idx), B), device=dev)
         total = torch.zeros((), device=dev)
         kick = F_POI * W_SYN
+        acc = phase[:, None].expand(-1, B).clone()
         for t in range(steps):
             g.mul_(self.a_g).add_(torch.sparse.mm(self.W, buf[t % DELAY_STEPS]))
             v.mul_(1 - self.k_v).add_(g, alpha=self.k_v).add_(V0 * self.k_v)
             v.masked_fill_(rfc > 0, V_RST)
             if not silent_inputs:
-                v.index_add_(0, in_idx, (torch.rand_like(p_in) < p_in).float() * kick)
+                acc.add_(p_in)
+                fire = (acc >= 1.0).float()
+                acc.sub_(fire)
+                v.index_add_(0, in_idx, fire * kick)
             spk = v > V_TH
             v.masked_fill_(spk, V_RST)
             g.masked_fill_(spk, 0.0)

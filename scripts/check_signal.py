@@ -40,7 +40,7 @@ def values_for(boards, pieces):
 def timed_run(brain, p, **kw):
     torch.cuda.synchronize()
     t = time.perf_counter()
-    counts, rate = brain.run(eyes.in_idx, p, args.steps, dn_idx, **kw)
+    counts, rate = brain.run(eyes.in_idx, p, args.steps, dn_idx, eyes.phase, **kw)
     torch.cuda.synchronize()
     return counts.cpu().numpy(), float(rate), (time.perf_counter() - t) / args.steps
 
