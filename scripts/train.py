@@ -81,6 +81,10 @@ def main(argv=None):
     ap.add_argument("--until", default="", help="stop before starting a generation after HH:MM")
     ap.add_argument("--validate-every", type=int, default=5)
     ap.add_argument("--max-batch", type=int, default=None, help="brain batch (64 columns, 384 afterstate)")
+    ap.add_argument("--init", default="", help="optional .npz containing initial params")
+    ap.add_argument("--init-std", type=float, default=0.5)
+    ap.add_argument("--smooth", type=float, default=1.0,
+                    help="elite update weight; 0.7 smooths updates, 1.0 preserves the original behavior")
     args = ap.parse_args(argv)
     after = args.head == "afterstate"
     groups_file = args.groups or str(GROUPS_AFTER if after else GROUPS)
@@ -119,7 +123,15 @@ def main(argv=None):
             champ, champ_score, champ_gen = s["champion"], float(s["champion_score"]), int(s["champion_gen"])
         log(f"resuming at generation {gen}")
     else:
-        gen, mu, var = 0, np.zeros(shape, np.float32), np.ones(shape, np.float32)
+        if args.init:
+            with np.load(args.init) as initial:
+                mu = initial["params"].astype(np.float32)
+            if mu.shape != shape:
+                raise ValueError(f"initial params have shape {mu.shape}, expected {shape}")
+            var = np.full(shape, args.init_std ** 2, np.float32)
+        else:
+            mu, var = np.zeros(shape, np.float32), np.ones(shape, np.float32)
+        gen = 0
         champ, champ_score, champ_gen = mu.copy(), -1.0, -1
         log(f"new run: {vars(args)}")
 
@@ -138,12 +150,14 @@ def main(argv=None):
         save_npz(out / f"gen_{gen:04d}.npz", seed=seed, moves=moves, death=death_index(batch, args.cap),
                  lines=batch.lines.astype(np.int32), params=params)
 
-        mu = params[elite].mean(0)
+        elite_mu = params[elite].mean(0)
         extra = max(5 - gen / 10, 0) * NOISE_SCALE
         if after:
             # ~33 weights and one game per fly collapse the elite spread in tens of generations; std >= 0.1 keeps searching
             extra = max(extra, 0.01)
-        var = params[elite].var(0) + extra
+        elite_var = params[elite].var(0) + extra
+        mu = args.smooth * elite_mu + (1 - args.smooth) * mu
+        var = args.smooth * elite_var + (1 - args.smooth) * var
         msg = (f"gen {gen}: best {batch.lines.max()} lines / {batch.placed.max()} pieces, "
                f"elite mean {batch.lines[elite].mean():.1f} lines, pop mean {batch.lines.mean():.1f}, "
                f"mean std {np.sqrt(var).mean():.3f}")
