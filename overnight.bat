@@ -9,13 +9,13 @@ rem Turn off QuickEdit for this window so a stray click cannot pause the run.
 powershell -NoProfile -Command "$s='[DllImport(\"kernel32.dll\")]public static extern IntPtr GetStdHandle(int h);[DllImport(\"kernel32.dll\")]public static extern bool GetConsoleMode(IntPtr h,out uint m);[DllImport(\"kernel32.dll\")]public static extern bool SetConsoleMode(IntPtr h,uint m);';$k=Add-Type -MemberDefinition $s -Name K -Namespace Q -PassThru;$h=$k::GetStdHandle(-10);$m=0;[void]$k::GetConsoleMode($h,[ref]$m);[void]$k::SetConsoleMode($h,($m -band (-bnot 0x40)) -bor 0x80)" >nul 2>&1
 
 echo Flytris is training. Leave this window open and the laptop plugged in.
-echo Progress: runs\train\train.log   Stage log: %LOG%
+echo Progress: runs\train_after\train.log   Stage log: %LOG%
 echo Please do not click inside this window.
 echo [%date% %time%] overnight run started>> %LOG%
 
 call :stage train "python -X utf8 scripts\train.py --head afterstate --pop 32 --elites 5 --validate-every 10 --until 03:00"
 if exist scripts\evaluate.py call :stage evaluate "python -X utf8 scripts\evaluate.py"
-if exist scripts\tournament.py call :stage tournament "python -X utf8 scripts\tournament.py"
+call :stage tournament "python -X utf8 scripts\tournament.py"
 
 echo [%date% %time%] overnight run finished>> %LOG%
 echo Done. See %LOG%
