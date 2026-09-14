@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 from .eyes import board_channels
-from .tetris import COLS, PLACEMENTS
+from .tetris import COLS, PLACEMENTS, drop
 
 ROOT = Path(__file__).resolve().parents[1]
 GROUPS = ROOT / "runs" / "readout_groups.npz"
@@ -125,6 +125,102 @@ def play(batches, params, player, cap, mode="brain"):
             move = np.full(b.n, DEAD, np.uint8)
             move[idx] = c[idx]
             logs[i].append(move)
+            b.step(c)
+    return [np.stack(m) if m else np.zeros((0, b.n), np.uint8) for m, b in zip(logs, batches)]
+
+
+GROUPS_AFTER = ROOT / "runs" / "readout_groups_after.npz"
+
+
+class AfterstateFlyPlayer(FlyPlayer):
+    """Shows the eyes each board a landing would leave (R7/R8 silent: piece_hz is 0 in the
+    groups file). The brain is deterministic, so each distinct board is simulated once."""
+
+    def __init__(self, groups_file=GROUPS_AFTER, max_batch=384, cache_size=400_000, device="cuda"):
+        super().__init__(groups_file=groups_file, max_batch=max_batch, device=device)
+        self.cache, self.cache_size = {}, cache_size
+
+    def board_features(self, boards):
+        keys = [b.tobytes() for b in boards]
+        out = np.empty((len(boards), self.n_features), np.float32)
+        miss = []
+        for i, k in enumerate(keys):
+            hit = self.cache.get(k)
+            if hit is None:
+                miss.append(i)
+            else:
+                out[i] = hit
+        if miss:
+            first = {}
+            for i in miss:
+                first.setdefault(keys[i], i)
+            f = self.features(boards[list(first.values())], np.zeros(len(first), np.int64))
+            fresh = dict(zip(first.keys(), f))
+            for i in miss:
+                out[i] = fresh[keys[i]]
+            if len(self.cache) + len(fresh) > self.cache_size:
+                self.cache.clear()
+            self.cache.update(fresh)
+        return out
+
+
+class AfterstateNoBrainPlayer:
+    """Same after-state head fed the heights and holes channels directly."""
+    n_features = 2 * COLS
+
+    def board_features(self, boards):
+        return board_channels(boards, np.zeros(len(boards), np.int64))[:, :2 * COLS]
+
+
+def play_afterstate(batches, params, player, cap, mode="brain", seed=0):
+    """Like play(), but every fly scores each landing of the current piece and plays the best.
+    Landings that end the game are skipped unless there is no other. params: one [n, F+1]
+    array per batch. mode: "brain", "silenced" (zero features) or "shuffled" (each fly's
+    candidate features permuted among its own landings)."""
+    rng = np.random.default_rng(seed)
+    logs = [[] for _ in batches]
+    for _ in range(cap):
+        live = [i for i, b in enumerate(batches) if b.alive.any()]
+        if not live:
+            break
+        boards, owner_b, owner_f, move = [], [], [], []
+        for i in live:
+            b = batches[i]
+            idx = np.nonzero(b.alive)[0]
+            for j in range(b.options):
+                nb, _, dead = drop(b.boards[idx], b.piece, j)
+                ok = ~dead
+                boards.append(nb[ok])
+                owner_b.append(np.full(ok.sum(), i))
+                owner_f.append(idx[ok])
+                move.append(np.full(ok.sum(), j))
+        boards = np.concatenate(boards)
+        owner_b, owner_f, move = map(np.concatenate, (owner_b, owner_f, move))
+        group = owner_b * (max(b.n for b in batches) + 1) + owner_f
+        if len(boards):
+            if mode == "silenced":
+                feats = np.zeros((len(boards), player.n_features), np.float32)
+            else:
+                feats = player.board_features(boards)
+            if mode == "shuffled":
+                by_group = np.argsort(group, kind="stable")
+                feats[by_group] = feats[np.lexsort((rng.random(len(group)), group))]
+            w = np.concatenate([params[i][owner_f[owner_b == i]] for i in live])
+            order_in = np.concatenate([np.nonzero(owner_b == i)[0] for i in live])
+            value = np.empty(len(boards), np.float32)
+            value[order_in] = (feats[order_in] * w[:, :-1]).sum(1) + w[:, -1]
+            best = np.lexsort((-value, group))
+            first = best[np.r_[True, group[best][1:] != group[best][:-1]]]
+        else:
+            first = np.zeros(0, np.int64)
+        for i in live:
+            b = batches[i]
+            c = np.zeros(b.n, np.int64)
+            pick = first[owner_b[first] == i]
+            c[owner_f[pick]] = move[pick]
+            log = np.full(b.n, DEAD, np.uint8)
+            log[b.alive] = c[b.alive]
+            logs[i].append(log)
             b.step(c)
     return [np.stack(m) if m else np.zeros((0, b.n), np.uint8) for m, b in zip(logs, batches)]
 

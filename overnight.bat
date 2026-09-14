@@ -13,7 +13,7 @@ echo Progress: runs\train\train.log   Stage log: %LOG%
 echo Please do not click inside this window.
 echo [%date% %time%] overnight run started>> %LOG%
 
-call :stage train "python -X utf8 scripts\train.py --until 04:30"
+call :stage train "python -X utf8 scripts\train.py --head afterstate --pop 32 --elites 5 --validate-every 10 --until 03:00"
 if exist scripts\evaluate.py call :stage evaluate "python -X utf8 scripts\evaluate.py"
 if exist scripts\tournament.py call :stage tournament "python -X utf8 scripts\tournament.py"
 
