@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
+.pytest_cache/
 
 # connectome data is downloaded, not committed
 data/*
@@ -8,6 +9,30 @@ data/*
 data/malecns/*
 !data/malecns/build.py
 
-runs/
-media/*.mp4
-media/preview_mid.png
+# run outputs stay local, except the accepted V3 controller and its replays
+runs/*
+!runs/v3_modal/
+runs/v3_modal/*
+!runs/v3_modal/wide2048/
+
+# media: only what the README shows
+media/*
+!media/flytris.gif
+!media/connectome.png
+!media/preview_*.png
+
+# local scratch
+colab-upload/
+snapshot_failures/
+*.zip
+
+# 3D arcade: build outputs and downloads
+arcade3d/node_modules/
+arcade3d/chunks/
+arcade3d/nmf_full/
+arcade3d/stills*/
+arcade3d/views/
+arcade3d/*.png
+arcade3d/soundtrack.wav
+arcade3d/timeline.json
+arcade3d/publish_fly.py

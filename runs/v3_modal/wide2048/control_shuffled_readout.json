@@ -1,0 +1,58 @@
+{
+  "created_at": "2026-09-15T19:37:17.383051+00:00",
+  "controller": "fly_connectome_wide2048_transition_readout",
+  "control": "shuffled_readout",
+  "seed_range": [
+    1900000,
+    1900011
+  ],
+  "cap": 300,
+  "games": 12,
+  "lines": [
+    5,
+    8,
+    8,
+    5,
+    8,
+    8,
+    7,
+    4,
+    1,
+    4,
+    3,
+    4
+  ],
+  "pieces": [
+    53,
+    59,
+    59,
+    53,
+    58,
+    58,
+    58,
+    50,
+    43,
+    49,
+    46,
+    48
+  ],
+  "alive": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+  ],
+  "mean_lines": 5.416666666666667,
+  "best_lines": 8,
+  "survived": 0,
+  "seconds": 126.57027697563171,
+  "peak_vram_gib": 1.3405909538269043
+}

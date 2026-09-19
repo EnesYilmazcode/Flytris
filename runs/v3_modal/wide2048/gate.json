@@ -1,0 +1,46 @@
+{
+  "created_at": "2026-09-15T19:20:31.643764+00:00",
+  "actual_gpu": "NVIDIA L4",
+  "parents": 800,
+  "afterstates": 15169,
+  "recorded_neurons": 3555,
+  "steps": 150,
+  "bin_steps": 150,
+  "eyes_mode": "features",
+  "stimulus_mode": "transition",
+  "readout": "types_L1_L2",
+  "screened_features": 3555,
+  "selected_features": 2048,
+  "heldout_top_move_agreement": 0.5448717948717948,
+  "gate": 0.5,
+  "passed": true,
+  "best_lambda": 100.0,
+  "trials": [
+    {
+      "lambda": 0.1,
+      "heldout_top_move_agreement": 0.5128205128205128
+    },
+    {
+      "lambda": 1,
+      "heldout_top_move_agreement": 0.5128205128205128
+    },
+    {
+      "lambda": 10,
+      "heldout_top_move_agreement": 0.5128205128205128
+    },
+    {
+      "lambda": 100,
+      "heldout_top_move_agreement": 0.5448717948717948
+    },
+    {
+      "lambda": 1000,
+      "heldout_top_move_agreement": 0.5256410256410257
+    },
+    {
+      "lambda": 10000,
+      "heldout_top_move_agreement": 0.4807692307692308
+    }
+  ],
+  "seconds": 457.42021322250366,
+  "peak_vram_gib": 1.6801972389221191
+}

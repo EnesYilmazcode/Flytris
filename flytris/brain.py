@@ -77,13 +77,22 @@ class Brain:
         self.a_g = float(np.exp(-DT / TAU_SYN))
 
     @torch.no_grad()
-    def run(self, in_idx, p_in, steps, record_idx, phase, silent_inputs=False):
+    def run(self, in_idx, p_in, steps, record_idx, phase, silent_inputs=False, bin_steps=None,
+            p_in_after=None, switch_step=None):
         """Simulate `steps` ms from rest.
 
         in_idx [n_in] input neuron ids; p_in [n_in, B] input spikes per step (0..1);
         phase [n_in] fixed starting phase of each input cell's spike train.
         Returns (spike counts [n_rec, B], mean spikes per step across the batch).
+        With bin_steps, the first result is consecutive time bins concatenated on
+        the feature axis: [ceil(steps / bin_steps) * n_rec, B].
+        With p_in_after and switch_step, the stimulus changes without resetting the
+        membrane, conductance, refractory state, delay buffer, or input phases.
         """
+        if (p_in_after is None) != (switch_step is None):
+            raise ValueError("p_in_after and switch_step must be provided together")
+        if switch_step is not None and not 0 < switch_step < steps:
+            raise ValueError("switch_step must be between 1 and steps - 1")
         B = p_in.shape[1]
         dev = self.device
         v = torch.full((self.n, B), V0, device=dev)
@@ -91,6 +100,8 @@ class Brain:
         rfc = torch.zeros((self.n, B), dtype=torch.int8, device=dev)
         buf = [torch.zeros((self.n, B), device=dev) for _ in range(DELAY_STEPS)]
         counts = torch.zeros((len(record_idx), B), device=dev)
+        bin_counts = torch.zeros_like(counts) if bin_steps else None
+        bins = []
         total = torch.zeros((), device=dev)
         kick = F_POI * W_SYN
         acc = phase[:, None].expand(-1, B).clone()
@@ -99,7 +110,8 @@ class Brain:
             v.mul_(1 - self.k_v).add_(g, alpha=self.k_v).add_(V0 * self.k_v)
             v.masked_fill_(rfc > 0, V_RST)
             if not silent_inputs:
-                acc.add_(p_in)
+                drive = p_in_after if switch_step is not None and t >= switch_step else p_in
+                acc.add_(drive)
                 fire = (acc >= 1.0).float()
                 acc.sub_(fire)
                 v.index_add_(0, in_idx, fire * kick)
@@ -109,6 +121,12 @@ class Brain:
             rfc = torch.where(spk, REFRACTORY_STEPS, (rfc - 1).clamp_(min=0)).to(torch.int8)
             s = spk.float()
             buf[t % DELAY_STEPS] = s
-            counts += s[record_idx]
+            recorded = s[record_idx]
+            counts += recorded
+            if bin_steps:
+                bin_counts += recorded
+                if (t + 1) % bin_steps == 0 or t + 1 == steps:
+                    bins.append(bin_counts.clone())
+                    bin_counts.zero_()
             total += s.sum()
-        return counts, total / (steps * B)
+        return (torch.cat(bins, 0) if bin_steps else counts), total / (steps * B)

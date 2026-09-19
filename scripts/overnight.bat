@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableDelayedExpansion
-cd /d "%~dp0"
+cd /d "%~dp0.."
 title Flytris overnight run
 if not exist runs\overnight mkdir runs\overnight
 set LOG=runs\overnight\overnight.log

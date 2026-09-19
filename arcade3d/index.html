@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Flytris Arcade</title>
+<style>
+  html, body { margin: 0; background: #000; overflow: hidden; }
+  canvas { display: block; }
+  body.preview canvas { height: 100vh; width: auto; margin: 0 auto; }
+  #hud { position: fixed; left: 10px; bottom: 8px; color: #9ab; font: 13px monospace; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./node_modules/three/build/three.module.js", "three/addons/": "./node_modules/three/examples/jsm/" } }
+</script>
+</head>
+<body>
+<div id="hud"></div>
+<script>
+  if ((new URLSearchParams(location.search).get('mode') || 'preview') === 'preview') document.body.classList.add('preview');
+  addEventListener('error', e => { document.title = 'ERROR ' + e.message; window.flytrisError = e.message + ' @' + e.filename + ':' + e.lineno; });
+  addEventListener('unhandledrejection', e => { window.flytrisError = String(e.reason && e.reason.stack || e.reason); });
+</script>
+<script type="module" src="./main.js"></script>
+</body>
+</html>

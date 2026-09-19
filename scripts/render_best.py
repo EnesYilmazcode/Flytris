@@ -39,25 +39,32 @@ MONO = font("consola.ttf", 27)
 
 def best_game(run_dir):
     best = None
-    for path in sorted(run_dir.glob("gen_*.npz")):
+    for path in sorted(run_dir.glob("*.npz")):
         with np.load(path) as data:
+            if "lines" not in data or "moves" not in data:
+                continue
             lines = data["lines"]
             moves = data["moves"]
             pieces = (moves != 255).sum(0)
             i = int(np.lexsort((-pieces, -lines))[0])
             key = (int(lines[i]), int(pieces[i]))
+            if "seeds" in data:
+                seed = int(data["seeds"][i])
+            else:
+                seed = int(data["seed"])
             if best is None or key > best[0]:
-                best = (key, path, i, int(data["seed"]), moves[:, i].copy())
+                best = (key, path, i, seed, moves[:, i].copy())
     if best is None:
         raise RuntimeError(f"no generation files found in {run_dir}")
     return best
 
 
-def frame(board, generation, fly, piece_no, lines, note=""):
+def frame(board, generation, fly, piece_no, lines, note="", title="BEST FLY SO FAR", subtitle=None):
     im = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(im)
-    d.text((W // 2, 55), "BEST FLY SO FAR", font=TITLE, fill=(245, 245, 248), anchor="mm")
-    d.text((W // 2, 103), f"generation {generation}  •  fly #{fly + 1}",
+    d.text((W // 2, 55), title, font=TITLE, fill=(245, 245, 248), anchor="mm")
+    subtitle = subtitle or f"generation {generation} | fly #{fly + 1}"
+    d.text((W // 2, 103), subtitle,
            font=LABEL, fill=(148, 154, 170), anchor="mm")
     d.rectangle((X0 - 5, Y0 - 5, X0 + BOARD_W + 5, Y0 + BOARD_H + 5),
                 outline=(92, 98, 118), width=5)
@@ -85,10 +92,12 @@ def main(argv=None):
     ap.add_argument("--run-dir", default=str(ROOT / "runs/train_after"))
     ap.add_argument("--out", default=str(ROOT / "runs/train_after/best_so_far.mp4"))
     ap.add_argument("--fps", type=int, default=24)
+    ap.add_argument("--title", default="BEST FLY SO FAR")
+    ap.add_argument("--subtitle", default="")
     args = ap.parse_args(argv)
 
     (score, path, fly, seed, moves) = best_game(Path(args.run_dir))
-    generation = int(path.stem.split("_")[-1])
+    generation = int(path.stem.split("_")[-1]) if path.stem.startswith("gen_") else 0
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     ff = subprocess.Popen([
@@ -98,18 +107,22 @@ def main(argv=None):
     ], stdin=subprocess.PIPE)
 
     game = Batch(1, seed)
-    first = frame(game.boards[0], generation, fly, 0, 0)
+    subtitle = args.subtitle or f"seed {seed} | simulated connectome controller"
+    first = frame(game.boards[0], generation, fly, 0, 0,
+                  title=args.title, subtitle=subtitle)
     for _ in range(args.fps):
         ff.stdin.write(first.tobytes())
     for choice in moves:
         if not game.alive[0] or choice == 255:
             break
         game.step([int(choice)])
-        image = frame(game.boards[0], generation, fly, int(game.placed[0]), int(game.lines[0]))
+        image = frame(game.boards[0], generation, fly, int(game.placed[0]), int(game.lines[0]),
+                      title=args.title, subtitle=subtitle)
         for _ in range(5):
             ff.stdin.write(image.tobytes())
     final = frame(game.boards[0], generation, fly, int(game.placed[0]), int(game.lines[0]),
-                  "GAME OVER" if not game.alive[0] else "CURRENT CHECKPOINT")
+                  "GAME OVER" if not game.alive[0] else "CURRENT CHECKPOINT",
+                  title=args.title, subtitle=subtitle)
     for _ in range(args.fps * 2):
         ff.stdin.write(final.tobytes())
     ff.stdin.close()

@@ -19,6 +19,7 @@ from .tetris import COLS, H, ROWS, column_tops
 
 DATA = Path(__file__).resolve().parents[1] / "data" / "malecns"
 MAP = DATA / "eye_map.npz"
+PIXEL_MAP = DATA / "pixel_eye_map.npz"
 N_CHANNELS = 2 * COLS + 7
 PHASE_SEED = 20260913
 
@@ -108,4 +109,74 @@ class Eyes:
         hz = torch.full((N_CHANNELS, 1), self.board_hz * board_gain, device=self.device)
         hz[2 * COLS:] = self.piece_hz
         p = (v * hz)[self.channel] * self.scale[:, None] * 1e-3
+        return p.clamp_(0, 1)
+
+
+def build_pixel_eye_map():
+    """Map R1-R6 photoreceptors retinotopically onto the visible 20x10 board."""
+    nr = pd.read_parquet(DATA / "neurons.parquet", columns=["idx", "body_id", "type", "side"])
+    ann = pd.read_feather(DATA / "raw/body-annotations-male-cns-v1.0-minconf-0.5.feather",
+                          columns=["bodyId", "assignedOlHex1", "assignedOlHex2"])
+    pos = ann.set_index("bodyId")[["assignedOlHex1", "assignedOlHex2"]]
+    lam = nr[nr.type.isin(["L1", "L2"])]
+    h1 = np.full(len(nr), np.nan)
+    h2 = np.full(len(nr), np.nan)
+    h1[lam.idx] = pos.assignedOlHex1.reindex(lam.body_id).values
+    h2[lam.idx] = pos.assignedOlHex2.reindex(lam.body_id).values
+
+    r16 = nr[nr.type == "R1-R6"]
+    is_r = np.zeros(len(nr), bool)
+    is_r[r16.idx] = True
+    z = np.load(DATA / "edges.npz")
+    edge = np.nonzero(is_r[z["pre"]])[0]
+    pre, post, syn = z["pre"][edge], z["post"][edge], z["syn"][edge]
+    valid = ~np.isnan(h1[post]) & ~np.isnan(h2[post])
+    pre, post, syn = pre[valid], post[valid], syn[valid]
+    order = np.lexsort((-syn, pre))
+    first = np.unique(pre[order], return_index=True)[1]
+    partner = np.full(len(nr), -1, np.int64)
+    partner[pre[order][first]] = post[order][first]
+
+    def rank_bins(values, bins):
+        rank = np.argsort(np.argsort(values, kind="stable"), kind="stable")
+        return np.minimum(rank * bins // len(rank), bins - 1)
+
+    in_idx, channel = [], []
+    for side in "LR":
+        rs = r16[(r16.side == side) & (partner[r16.idx] >= 0)].copy()
+        p = partner[rs.idx]
+        horizontal = h1[p] - h2[p]
+        vertical = h1[p] + h2[p]
+        col_half = rank_bins(horizontal, COLS // 2)
+        col = col_half if side == "L" else COLS - 1 - col_half
+        row = np.empty(len(rs), np.int64)
+        for c in range(COLS // 2):
+            use = np.flatnonzero(col_half == c)
+            row[use] = rank_bins(vertical[use], ROWS)
+        in_idx.append(rs.idx.to_numpy(np.int64))
+        channel.append((row * COLS + col).astype(np.int64))
+    np.savez(PIXEL_MAP, in_idx=np.concatenate(in_idx), channel=np.concatenate(channel),
+             rows=ROWS, cols=COLS, method="strongest_L1_L2_partner_rank_bins")
+    return np.load(PIXEL_MAP)
+
+
+class PixelEyes:
+    """Raw visible board occupancy projected onto inferred retinal coordinates."""
+    n_channels = ROWS * COLS
+
+    def __init__(self, board_hz=500.0, device="cuda"):
+        m = np.load(PIXEL_MAP) if PIXEL_MAP.exists() else build_pixel_eye_map()
+        self.in_idx = torch.from_numpy(m["in_idx"]).to(device)
+        self.channel = torch.from_numpy(m["channel"]).to(device)
+        rng = np.random.default_rng(PHASE_SEED)
+        self.phase = torch.from_numpy(rng.random(len(m["in_idx"]), dtype=np.float32)).to(device)
+        self.board_hz, self.device = board_hz, device
+
+    def channels(self, boards, pieces=None):
+        visible = (np.asarray(boards)[:, H - ROWS:] != 0).astype(np.float32)
+        return visible.reshape(len(visible), -1).T
+
+    def probs(self, values, board_gain=1.0):
+        v = torch.as_tensor(values, device=self.device)
+        p = v[self.channel] * (self.board_hz * board_gain * 1e-3)
         return p.clamp_(0, 1)
