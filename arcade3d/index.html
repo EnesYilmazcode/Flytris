@@ -6,8 +6,15 @@
 <style>
   html, body { margin: 0; background: #000; overflow: hidden; }
   canvas { display: block; }
-  body.preview canvas { height: 100vh; width: auto; margin: 0 auto; }
+  body.preview { height: 100vh; display: flex; align-items: center; justify-content: center; }
+  body.preview canvas { width: min(100vw, 80vh); height: min(125vw, 100vh); }
+  #credit { position: fixed; right: 10px; bottom: 8px; font: 12px system-ui, sans-serif; color: #8a90b0; }
+  #credit a { color: #b9a6ff; }
   #hud { position: fixed; left: 10px; bottom: 8px; color: #9ab; font: 13px monospace; }
+  #start { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 16px 28px;
+           font: 600 20px system-ui, sans-serif; color: #fff; background: rgba(20, 10, 40, 0.8);
+           border: 2px solid #ff3cac; border-radius: 12px; cursor: pointer; }
+  #start[hidden] { display: none; }
 </style>
 <script type="importmap">
 { "imports": { "three": "./node_modules/three/build/three.module.js", "three/addons/": "./node_modules/three/examples/jsm/" } }
@@ -15,6 +22,8 @@
 </head>
 <body>
 <div id="hud"></div>
+<div id="credit">Flytris, running live in your browser &middot; <a href="https://github.com/EnesYilmazcode/Flytris">code</a></div>
+<button id="start" hidden>&#9654; Tap to play (sound on)</button>
 <script>
   if ((new URLSearchParams(location.search).get('mode') || 'preview') === 'preview') document.body.classList.add('preview');
   addEventListener('error', e => { document.title = 'ERROR ' + e.message; window.flytrisError = e.message + ' @' + e.filename + ':' + e.lineno; });

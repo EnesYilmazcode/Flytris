@@ -19,6 +19,7 @@ runs/v3_modal/*
 media/*
 !media/flytris.gif
 !media/connectome.png
+!media/best_game.gif
 !media/preview_*.png
 
 # local scratch

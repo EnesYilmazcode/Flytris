@@ -5,14 +5,14 @@ The real wiring of an adult fly, all 166,700 neurons, gets the board through its
 
 <p align="center">
   <a href="https://sparkylab.web.app/fly/"><img src="media/flytris.gif" width="320" alt="Thousands of simulated flies play Tetris in a 3D arcade until one is left"></a><br>
-  <a href="https://sparkylab.web.app/fly/"><b>▶ Watch with sound</b></a>
+  <a href="https://sparkylab.web.app/fly/"><b>▶ Watch with sound</b></a> &nbsp;·&nbsp; <a href="https://sparkylab.web.app/fly/live/"><b>🕹️ Run it live in 3D</b></a>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/neurons-166%2C700-ff3cac?style=for-the-badge" alt="166,700 neurons">
-  <img src="https://img.shields.io/badge/best%20game-86%20lines-00d8ff?style=for-the-badge" alt="best game 86 lines">
-  <img src="https://img.shields.io/badge/trained%20on-Modal-7fee64?style=for-the-badge" alt="trained on Modal">
-  <img src="https://img.shields.io/badge/rendered%20in-three.js-white?style=for-the-badge&logo=threedotjs&logoColor=black" alt="rendered in three.js">
+  <a href="https://male-cns.janelia.org/"><img src="https://img.shields.io/badge/neurons-166%2C700-ff3cac?style=for-the-badge" alt="166,700 neurons: the MaleCNS connectome"></a>
+  <a href="media/best_game.gif"><img src="https://img.shields.io/badge/best%20game-86%20lines-00d8ff?style=for-the-badge" alt="best game 86 lines: watch it"></a>
+  <a href="https://modal.com"><img src="https://img.shields.io/badge/trained%20on-Modal-7fee64?style=for-the-badge" alt="trained on Modal"></a>
+  <a href="https://sparkylab.web.app/fly/live/"><img src="https://img.shields.io/badge/rendered%20in-three.js-white?style=for-the-badge&logo=threedotjs&logoColor=black" alt="rendered in three.js: run it live"></a>
 </p>
 
 ## How it works
@@ -26,6 +26,27 @@ The real wiring of an adult fly, all 166,700 neurons, gets the board through its
 3. 🕹️ **Move out.** A readout over 2,048 L1/L2 neurons scores each landing and the best one drops. Only this readout learns, by copying a simple Tetris strategy.
 
 About 8,000 simulated flies played over the project, an estimated 6 to 8 million runs of the brain. Training ran on [Modal](https://modal.com) L4 GPUs.
+
+## System design
+
+```mermaid
+flowchart TB
+  B["Tetris board<br/>+ every legal landing"] --> E["👁️ Eyes<br/>column heights and holes → photoreceptor spikes"]
+  E --> C["🧠 MaleCNS connectome<br/>166,700 spiking neurons · 150 ms per landing<br/>sparse PyTorch on GPU"]
+  C --> R["2,048 L1/L2 spike counts"]
+  R --> S["Linear readout scores each landing"]
+  S --> D["🕹️ Best landing drops"]
+  subgraph train["☁️ Training on Modal L4"]
+    T["No-brain teacher policy"] --> I["Fit the readout to copy<br/>the teacher's choices"]
+    I --> G(["✅ Gates: held-out agreement,<br/>36 unseen games, controls"])
+  end
+  G -. accepted weights .-> S
+  subgraph video["🎬 The video"]
+    V["7,172 recorded games"] --> A["three.js arcade<br/>NeuroMechFly bodies"]
+    A --> F["Headless Chromium frames<br/>+ synthesized soundtrack"]
+  end
+  D -. every move recorded .-> V
+```
 
 ## Results
 

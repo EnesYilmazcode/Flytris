@@ -12,7 +12,9 @@ import * as FLY from './fly.js';
 import * as CAB from './cabinet.js';
 
 const Q = new URLSearchParams(location.search);
-const W = +Q.get('w') || 1080, HT = +Q.get('h') || 1350;
+// Phones get a lighter live preview; captures always use the full frame.
+const SMALL = (Q.get('mode') || 'preview') === 'preview' && matchMedia('(max-width: 800px)').matches;
+const W = +Q.get('w') || (SMALL ? 720 : 1080), HT = +Q.get('h') || (SMALL ? 900 : 1350);
 const FPS = 30;
 const LIMIT = +Q.get('n') || 0;
 const MODE = Q.get('mode') || 'preview';
@@ -130,7 +132,7 @@ scene.background = FOG;
 scene.fog = new THREE.FogExp2(FOG, 0.01);
 const camera = new THREE.PerspectiveCamera(40, W / HT, 0.15, 1500);
 
-const rt = new THREE.WebGLRenderTarget(W, HT, { type: THREE.HalfFloatType, samples: +(Q.get('msaa') ?? 4) });
+const rt = new THREE.WebGLRenderTarget(W, HT, { type: THREE.HalfFloatType, samples: +(Q.get('msaa') ?? (SMALL ? 2 : 4)) });
 const composer = new EffectComposer(renderer, rt);
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(W, HT), 0.85, 0.55, 0.85);
@@ -955,20 +957,40 @@ window.flytris = {
 };
 
 if (MODE === 'preview') {
-  const hud = document.getElementById('hud');
-  let t = +Q.get('t') || 0, playing = true, last = performance.now();
+  // Live playback. With ?audio=<file> the scene follows the soundtrack, started by a tap.
+  const hud = Q.get('hud') ? document.getElementById('hud') : null;
+  const audio = Q.get('audio') ? new Audio(Q.get('audio')) : null;
+  const button = document.getElementById('start');
+  let t = +Q.get('t') || 0, playing = !audio, last = performance.now();
+  if (audio && button) {
+    button.hidden = false;
+    button.onclick = () => {
+      button.hidden = true;
+      audio.currentTime = 0;
+      audio.play();
+      playing = true;
+    };
+    audio.addEventListener('ended', () => {
+      playing = false;
+      button.textContent = '↻ Replay';
+      button.hidden = false;
+    });
+  }
   addEventListener('keydown', e => {
-    if (e.key === ' ') playing = !playing;
-    if (e.key === 'ArrowRight') t += 1;
-    if (e.key === 'ArrowLeft') t = Math.max(0, t - 1);
-    if (e.key === 'Home') t = 0;
+    if (e.key === ' ') {
+      playing = !playing;
+      if (audio) playing ? audio.play() : audio.pause();
+    }
+    if (!audio && e.key === 'ArrowRight') t += 1;
+    if (!audio && e.key === 'ArrowLeft') t = Math.max(0, t - 1);
   });
   const loop = now => {
-    if (playing) t += (now - last) / 1000;
+    if (audio) t = playing ? audio.currentTime : t;
+    else if (playing) t += (now - last) / 1000;
     last = now;
-    if (t > T.end) t = 0;
-    const alive = render(t);
-    if (hud) hud.textContent = `${t.toFixed(1)}s  alive ${alive}/${N}  [space] pause  [<-/->] seek`;
+    if (!audio && t > T.end) t = 0;
+    const alive = render(Math.min(t, T.end));
+    if (hud) hud.textContent = `${t.toFixed(1)}s  alive ${alive}/${N}`;
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
