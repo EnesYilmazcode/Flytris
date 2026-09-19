@@ -5,7 +5,7 @@ The real wiring of an adult fly, all 166,700 neurons, gets the board through its
 
 <p align="center">
   <a href="https://sparkylab.web.app/fly/live/"><img src="media/flytris.gif" width="320" alt="Thousands of simulated flies play Tetris in a 3D arcade until one is left"></a><br>
-  <a href="https://sparkylab.web.app/fly/live/"><b>Watch with sound</b></a>
+  <a href="https://x.com/enes_code/status/2101317135092023610"><b>See the video on X</b></a>
 </p>
 
 ## How it works
@@ -58,6 +58,8 @@ Lines cleared per game. The last three rows each break one part of the fly, and 
 The last three ran on 12 of those games, where the intact fly averaged 33.7. Full write-up: [docs/V3-FINAL-REPORT.md](docs/V3-FINAL-REPORT.md).
 
 ## The video
+
+[Watch the full Flytris video on X.](https://x.com/enes_code/status/2101317135092023610)
 
 Every cabinet replays a real recorded game (1,500 of the 7,172 saved move by move). A fly takes off when its game ended, so the order is real, and the last one standing is the 86-line game. The fly is [NeuroMechFly](https://github.com/NeLy-EPFL/flygym), a micro-CT scan of a real *Drosophila*. The music is Korobeiniki, the Tetris tune, synthesized in code. See [arcade3d/](arcade3d/).
 
