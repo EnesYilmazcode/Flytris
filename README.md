@@ -16,32 +16,32 @@ The real wiring of an adult fly, all 166,700 neurons, gets the board through its
 
 1. **Eyes.** For each spot the piece could land, the board it would leave behind (column heights and holes) becomes spikes in the fly's photoreceptors.
 2. **Brain.** The full MaleCNS connectome (166,700 neurons, 124 million synapses, mapped by HHMI Janelia and Google) runs as a spiking network for 150 ms. Its wiring is never changed.
-3. **Move.** A readout over 2,048 L1/L2 neurons scores each spot and the piece drops into the best one. This readout is the only part that learns: it was trained to pick the moves a simple Tetris bot picks.
+3. **Move.** A readout over 2,048 L1/L2 neurons scores each spot and the piece drops into the best one. This readout is the only part that learns. It learned from a Tetris bot's example moves during setup, then plays on its own.
 
 About 8,000 simulated flies played over the project, an estimated 6 to 8 million runs of the brain. Training ran on [Modal](https://modal.com) L4 GPUs.
 
 ## System design
 
-Three parts: how the fly picks a move, how its readout was trained, and how the video was made.
+During a game the bot is never consulted: every move comes from the fly's simulated neurons and the readout on top. The bot only supplied example moves once, during setup.
 
 ```mermaid
 flowchart TB
-  subgraph play["Picking a move"]
+  subgraph play["Playing a game"]
     B["Try every spot the piece can land"] --> E["Turn each resulting board into spikes in the fly's eyes"]
     E --> C["Simulate all 166,700 neurons for 150 ms on a GPU"]
     C --> R["Read 2,048 neurons (L1/L2)"]
-    R --> S["Score each spot and drop the piece in the best one"]
+    R --> S["The readout scores each spot and the piece drops in the best one"]
   end
-  subgraph train["Training, on Modal GPUs"]
-    T["A simple Tetris bot plays"] --> I["Fit the readout to pick what the bot picks"]
-    I --> G["Keep it only if it matches the bot on boards it has never seen"]
+  subgraph setup["One-time setup, on Modal GPUs"]
+    T["A Tetris bot shows example moves on practice boards"] --> I["The readout learns which neuron activity marks a good spot"]
   end
+  I -. trained once, then frozen .-> S
+  S --> X["36 new games: 40.7 lines on average, best 86. Neurons switched off: 0.08"]
   subgraph video["Making the video"]
     V["7,172 recorded games"] --> A["Replay each one in a 3D arcade"]
     A --> F["Render the frames and add music"]
   end
-  G -- trained readout --> S
-  S -- every move saved --> V
+  S -. every move saved .-> V
 ```
 
 ## Results
