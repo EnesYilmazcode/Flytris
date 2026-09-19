@@ -18,7 +18,7 @@ The real wiring of an adult fly, all 166,700 neurons, gets the board through its
 2. **Brain.** The full MaleCNS connectome (166,700 neurons, 124 million synapses, mapped by HHMI Janelia and Google) runs as a spiking network for 150 ms. Its wiring is never changed.
 3. **Move.** A readout over 2,048 L1/L2 neurons scores each spot and the piece drops into the best one. This readout is the only part that learns. It learned from a Tetris bot's example moves during setup, then plays on its own.
 
-About 8,000 simulated flies played over the project, an estimated 6 to 8 million runs of the brain. Training ran on [Modal](https://modal.com) L4 GPUs.
+About 8,000 simulated flies played over the project, running the brain about 7 million times (estimated 6 to 8 million). Training ran on [Modal](https://modal.com) L4 GPUs.
 
 ## System design
 
@@ -28,7 +28,7 @@ During a game the bot is never consulted: every move comes from the fly's simula
 flowchart TB
   subgraph play["Playing a game"]
     B["Try every spot the piece can land"] --> E["Turn each resulting board into spikes in the fly's eyes"]
-    E --> C["Simulate all 166,700 neurons for 150 ms on a GPU"]
+    E --> C["Simulate all 166,700 neurons for 150 ms on a GPU, about 7 million times over the project"]
     C --> R["Read 2,048 neurons (L1/L2)"]
     R --> S["The readout scores each spot and the piece drops in the best one"]
   end

@@ -11,6 +11,10 @@ least 50 lines, and two reached at least 75.
 
 The exact 86-line move sequence was saved, replayed deterministically, and rendered.
 
+Across V1 to V3 the project ran about 8,200 full games and simulated the connectome about
+7 million times (estimated 6 to 8 million, one simulation per candidate landing); see section 10
+of `V3-DEVELOPMENT-HISTORY.md`.
+
 ## What the controller is
 
 - A simulation of the 166,700-neuron MaleCNS fruit-fly connectome runs for every legal
